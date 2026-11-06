@@ -1,0 +1,275 @@
+generator client {
+  provider = "prisma-client-js"
+}
+
+datasource db {
+  provider = "postgresql"
+  url      = env("DATABASE_URL")
+}
+
+enum Role {
+  SUPER_ADMIN
+  EVENT_MANAGER
+  STALL_MANAGER
+  COMPETITION_MANAGER
+  ARTIST_MANAGER
+  GATE_STAFF
+  VOLUNTEER
+}
+
+enum RegistrationType {
+  GENERAL_ENTRY
+  FAMILY_PASS
+  SEASON_PASS
+  LITTLE_MASTERCHEF
+  ULTIMATE_CHEF
+  STALL_OWNER
+  PERFORMER
+  SPONSOR
+  VIP
+}
+
+enum TicketStatus {
+  PENDING
+  CONFIRMED
+  CHECKED_IN
+  CANCELLED
+  REFUNDED
+}
+
+enum StallCategory {
+  FOOD
+  SHOPPING
+}
+
+enum StallStatus {
+  AVAILABLE
+  RESERVED
+  OCCUPIED
+  CANCELLED
+}
+
+enum PaymentStatus {
+  PENDING
+  PAID
+  FAILED
+  REFUNDED
+}
+
+model User {
+  id            String    @id @default(cuid())
+  name          String
+  email         String    @unique
+  passwordHash  String
+  role          Role      @default(VOLUNTEER)
+  phone         String?
+  isActive      Boolean   @default(true)
+  createdAt     DateTime  @default(now())
+  updatedAt     DateTime  @updatedAt
+  auditLogs     AuditLog[]
+  sessions      Session[]
+}
+
+model Session {
+  id           String   @id @default(cuid())
+  sessionToken String   @unique
+  userId       String
+  expires      DateTime
+  user         User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+}
+
+model EventConfig {
+  id              String   @id @default(cuid())
+  eventName       String   @default("FESTORA")
+  fullTitle       String   @default("The Grand Food & Carnival Festival")
+  tagline         String   @default("One Festival. Endless Experiences.")
+  description     String   @db.Text
+  category        String   @default("Food Festival, Shopping Exhibition & Family Carnival")
+  startDate       DateTime
+  endDate         DateTime
+  operatingHours  String   @default("10:00 AM to 10:00 PM IST")
+  venueName       String   @default("CPED Ground")
+  venueAddress    String   @default("Club Road, Belagavi, Karnataka 590001")
+  organizerName   String   @default("Sanskruti Hongekar")
+  organizerEmail  String   @default("sanskrutihongekar@gmail.com")
+  organizerPhone  String   @default("+91 12345567789")
+  logoUrl         String?
+  primaryColor    String   @default("#DC2626")
+  secondaryColor  String   @default("#F59E0B")
+  isPublished     Boolean  @default(true)
+  updatedAt       DateTime @updatedAt
+  updatedBy       String?
+}
+
+model SPOC {
+  id          String   @id @default(cuid())
+  name        String
+  designation String
+  email       String
+  phone       String
+  whatsapp    String?
+  category    String
+  isActive    Boolean  @default(true)
+  createdAt   DateTime @default(now())
+  updatedAt   DateTime @updatedAt
+  registrations Registration[]
+}
+
+model Registration {
+  id              String           @id @default(cuid())
+  registrationId  String           @unique
+  type            RegistrationType
+  status          TicketStatus     @default(PENDING)
+  paymentStatus   PaymentStatus    @default(PENDING)
+  amountPaid      Int              @default(0)
+  
+  // Primary contact
+  fullName        String
+  email           String
+  phone           String
+  age             Int?
+  gender          String?
+  
+  // For teams / dual
+  partnerName     String?
+  partnerAge      Int?
+  partnerPhone    String?
+  
+  // Additional details
+  numberOfAdults  Int              @default(1)
+  numberOfKids    Int              @default(0)
+  specialRequests String?          @db.Text
+  organization    String?
+  
+  // Relations
+  spocId          String?
+  spoc            SPOC?            @relation(fields: [spocId], references: [id])
+  stallId         String?
+  stall           Stall?           @relation(fields: [stallId], references: [id])
+  
+  tickets         Ticket[]
+  createdAt       DateTime         @default(now())
+  updatedAt       DateTime         @updatedAt
+  
+  @@index([email])
+  @@index([registrationId])
+  @@index([type])
+  @@index([status])
+}
+
+model Ticket {
+  id              String       @id @default(cuid())
+  ticketId        String       @unique
+  registrationId  String
+  registration    Registration @relation(fields: [registrationId], references: [id], onDelete: Cascade)
+  
+  qrCodeData      String       @db.Text
+  qrCodeImage     String?      @db.Text
+  status          TicketStatus @default(CONFIRMED)
+  
+  checkedInAt     DateTime?
+  checkedInBy     String?
+  checkInLocation String?
+  
+  createdAt       DateTime     @default(now())
+  updatedAt       DateTime     @updatedAt
+  
+  @@index([ticketId])
+  @@index([status])
+}
+
+model Stall {
+  id              String        @id @default(cuid())
+  stallNumber     String        @unique
+  name            String
+  category        StallCategory
+  description     String?       @db.Text
+  ownerName       String?
+  ownerEmail      String?
+  ownerPhone      String?
+  status          StallStatus   @default(AVAILABLE)
+  zone            String?
+  dailyRent       Int           @default(0)
+  
+  registrations   Registration[]
+  createdAt       DateTime      @default(now())
+  updatedAt       DateTime      @updatedAt
+  
+  @@index([category])
+  @@index([status])
+}
+
+model CompetitionSlot {
+  id              String   @id @default(cuid())
+  competitionType String   // LITTLE_MASTERCHEF or ULTIMATE_CHEF
+  day             DateTime
+  maxTeams        Int      @default(20)
+  registeredTeams Int      @default(0)
+  isOpen          Boolean  @default(true)
+  createdAt       DateTime @default(now())
+  updatedAt       DateTime @updatedAt
+}
+
+model ScheduleItem {
+  id          String   @id @default(cuid())
+  day         Int      // 1-4
+  date        DateTime
+  startTime   String
+  endTime     String?
+  title       String
+  description String?  @db.Text
+  zone        String?
+  category    String?  // Demo, Competition, Performance, etc.
+  sortOrder   Int      @default(0)
+  isPublished Boolean  @default(true)
+  createdAt   DateTime @default(now())
+  updatedAt   DateTime @updatedAt
+}
+
+model Performer {
+  id          String   @id @default(cuid())
+  name        String
+  type        String   // Band, Dance, DJ, etc.
+  bio         String?  @db.Text
+  performanceDay Int?
+  startTime   String?
+  imageUrl    String?
+  isFeatured  Boolean  @default(false)
+  createdAt   DateTime @default(now())
+  updatedAt   DateTime @updatedAt
+}
+
+model PageContent {
+  id        String   @id @default(cuid())
+  slug      String   @unique
+  title     String
+  content   String   @db.Text
+  metaTitle String?
+  metaDesc  String?
+  isPublished Boolean @default(true)
+  updatedAt DateTime @updatedAt
+}
+
+model AuditLog {
+  id        String   @id @default(cuid())
+  action    String
+  entity    String
+  entityId  String?
+  details   String?  @db.Text
+  userId    String?
+  user      User?    @relation(fields: [userId], references: [id])
+  ipAddress String?
+  createdAt DateTime @default(now())
+  
+  @@index([entity])
+  @@index([createdAt])
+}
+
+model ReminderLog {
+  id             String   @id @default(cuid())
+  registrationId String
+  reminderType   String   // 7day, 3day, 1day, morning
+  sentAt         DateTime @default(now())
+  status         String   @default("sent")
+  error          String?
+}
